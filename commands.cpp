@@ -4,31 +4,58 @@
 using namespace std;
 
 
-job::job(int jobId, int pid, string cmd, double insertingTime, bool isStopped)
-{
-	jobId = jobId;
-	pid = pid;
-	cmd = cmd;
-	insertingTime = insertingTime;
-	isStopped = isStopped;
-}
+//*****************************
+//implementinf class functions
+//*****************************
 
+
+job::job(int jobId_, int pid_, string cmd_, double insertingTime_, bool isStopped_)
+{
+	jobId = jobId_;
+	pid = pid_;
+	cmd = cmd_;
+	insertingTime = insertingTime_;
+	isStopped = isStopped_;
+}
+int job::getJobId()
+{
+  return jobId;
+}
+int job::getPid()
+{
+  return pid;
+}
+string job::getCmd()
+{
+  return cmd;
+}
+double job::getInsertingTime()
+{
+  return insertingTime;
+}
+bool job::getIsStopped()
+{
+  return isStopped;
+}
 
 //**********************************
 //implementing helping functions
 //**********************************
 
-void deleteFinishedJobs(vector<job*> jobs)
+void deleteFinishedJobs(vector<job*>& jobs)
 {
+	int status;
+        pid_t waitResult ;
 	int index = 0;
-    for (unsigned int i=0; i<jobs.size(); i++) {
-    	int waitResult = waitpid(jobs[i]->getPid(), NULL, WNOHANG);
-        if (waitResult != 0) // means jobElem has finished
-        {
-            jobs.erase(jobs.begin() + index);
+	for (unsigned int i=0; i<jobs.size(); i++) 
+	{
+            waitResult = waitpid(jobs[i]->getPid(), &status, WNOHANG);
+            if (waitResult == -1) // means job[i] has finished
+            {
+                jobs.erase(jobs.begin() + index);
+            }
+            index++;
         }
-        index++;
-    }
 }
 
 bool compareByJobId(job* a, job* b) {
@@ -43,7 +70,7 @@ bool compareByJobId(job* a, job* b) {
 // Parameters: pointer to jobs, command string
 // Returns: 0 - success,1 - failure
 //**************************************************************************************
-int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_directory, char *past_temp)
+int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char *past_directory, char *past_temp)
 {
 	char* cmd; 
 	char* args[MAX_ARG];
@@ -89,8 +116,6 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 		if(!strcmp(directory,"-"))
 		{
 			getcwd(past_temp, (size_t)size_temp);
-			cout << "past_temp=" << past_temp << endl;
-			cout << "past_directory=" << past_directory << endl;
 			int ret;
 			ret = chdir (past_directory);
 			if(ret == -1) return 1;
@@ -100,8 +125,8 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 		}
 		else 
 		{
-			getcwd(past_directory, (size_t)size); 
 			int ret;
+			getcwd(past_directory, (size_t)size); 
 			ret = chdir (directory);
 			if(ret == -1) return 1;
 			cd_count++;
@@ -134,7 +159,6 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 		double timeElapsed;
 		deleteFinishedJobs(jobs);
 		sort(jobs.begin(), jobs.end(), compareByJobId); 
-	   
 		for (int i = 0; i < jobs.size(); i++) 
 		{
 			timeElapsed = difftime(time(NULL), jobs[i]->getInsertingTime());
@@ -219,6 +243,7 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 				kill(jobs[i]->getPid(), SIGCONT); 
 				int waitRes = waitpid(jobs[i]->getPid(), &status, WUNTRACED);
 				if (waitRes == -1 ) cout << "smash error : waitpid failed" << endl;
+				jobs.erase( jobs.begin()+i );
 				return 0;
 			}	
 		}
@@ -401,7 +426,7 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 	/*************************************************/
 	else // external command
 	{
- 		ExeExternal(args, cmdString);
+		ExeExternal(args, cmdString);
 	 	return 0;
 	}
 	if (illegal_cmd == TRUE)
@@ -420,39 +445,109 @@ int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_direct
 void ExeExternal(char *args[MAX_ARG], char* cmdString)
 {
 	int pID;
-	cout << "external" << endl;
-    	switch(pID = fork()) 
+        switch(pID = fork()) 
 	{
     		case -1: 
-					// Add your code here (error)
-					perror("smash error: fork failed");
-					return;
+			// Add your code here (error)
+			perror("smash error: fork failed");
+			return;
         	case 0 :
-                	// Child Process
+                  	// Child Process
                		if(setpgrp() == -1) 
                		{
                			perror("smash error: setpgrp failed");
                			return;
                		}
-					
-			        // Add your code here (execute an external command)
-					if (execvp(cmdString, args) == -1)
-					{
-						perror("smash error: execv failed");
-						return;
-					}
-					
+		      
+                        // Add your code here (execute an external command)
+                        if (execvp(args[0], args) == -1)
+                        {
+	                        perror("smash error: execv failed");
+	                        return;
+                        }
+				      
 			
-			default:
-                	// Add your code here
-					// if pid > 0 its parent procces
-					int status;
-					if(waitpid(pID, &status, WUNTRACED)==-1)
-					{
-						perror("smash error: waitpid failed");
-						return;
-					}
+              default:
+                        // Add your code here
+                        // if pid > 0 its parent procces
+                        int status;
+                        if(waitpid(pID, &status, WUNTRACED)==-1)
+                        {
+                          perror("smash error: waitpid failed");
+                          return;
+                        }
 	}
+}
+//**************************************************************************************
+// function name: BgCmd
+// Description: if command is in background, insert the command to jobs
+// Parameters: command string, pointer to jobs
+// Returns: 0- BG command -1- if not
+//**************************************************************************************
+int BgCmd(char* lineSize, vector<job*>& jobs)
+{
+	char* Command;
+	char* delimiters = " \t\n";
+	char *args[MAX_ARG];
+	int num_arg=0;
+	int maxJobId = 0;
+	int bgJobId;
+	int bgpId;
+	char* fullCommand;
+	strcpy(fullCommand, (const char*)lineSize);
+	if (lineSize[strlen(lineSize)-2] == '&')
+	{
+		lineSize[strlen(lineSize)-2] = '\0';
+		Command = strtok(lineSize, delimiters); 
+	   	args[0] = Command;
+		for (int i=1; i<MAX_ARG; i++)
+		{
+			args[i] = strtok(NULL, delimiters);
+			if (args[i] != NULL) { num_arg++; } 
+		}
+		args[num_arg-1] = NULL;
+		if (jobs.size() == 0) 
+		{
+			bgJobId = 1; 
+		}
+		else
+		{
+			for (int i=0; i<jobs.size(); i++)
+			{
+				if(jobs[i]->getJobId() > maxJobId)
+				{
+					maxJobId = (jobs[i]->getJobId());
+				}
+			}
+			bgJobId = maxJobId+1;
+		}
+		bgpId = fork();
+		if ( bgpId==-1 )
+		{
+			perror("smash error: fork failed");
+			return -1;			
+		}
+		if ( bgpId==0 ) /*child process*/
+		{
+			if(setpgrp() == -1) 
+			{
+				perror("smash error: setpgrp failed");
+				return -1;
+			}			
+			if (execvp(args[0],args) == -1)
+			{
+				perror("smash error: execv failed");
+				return -1;
+			}
+		}
+		else
+		{
+			job *new_job = new job(bgJobId, bgpId, fullCommand, time(NULL), false);
+			jobs.push_back(new_job);
+		}
+		return 0;
+	}
+	return -1;
 }
 //**************************************************************************************
 // function name: ExeComp
@@ -474,78 +569,5 @@ int ExeComp(char* lineSize)
 	} 
 	return -1;
 }
-//**************************************************************************************
-// function name: BgCmd
-// Description: if command is in background, insert the command to jobs
-// Parameters: command string, pointer to jobs
-// Returns: 0- BG command -1- if not
-//**************************************************************************************
-int BgCmd(char* lineSize, vector<job*> jobs)
-{
-
-	char* Command;
-	char* delimiters = " \t\n";
-	char *args[MAX_ARG];
-	int num_arg=0;
-	if (lineSize[strlen(lineSize)-2] == '&')
-	{
-		lineSize[strlen(lineSize)-2] = '\0';
-		// Add your code here (execute a in the background)
-		Command = strtok(lineSize, delimiters); 
-	   	args[0] = Command;
-		for (int i=1; i<MAX_ARG; i++)
-		{
-			args[i] = strtok(NULL, delimiters);
-			if (args[i] != NULL) {num_arg++;} 
-		}
-		args[num_arg-1] = NULL;
-		//get max jobId in jobs
-		int maxJobId = 0;
-		int bgJobId;
-		if (jobs.size() == 0) 
-		{
-			bgJobId = 1; 
-		}
-		else
-		{
-			for (int i=0; i<jobs.size(); i++)
-			{
-				if(jobs[i]->getJobId() > maxJobId)
-				{
-					maxJobId = (jobs[i]->getJobId());
-				}
-			}
-			bgJobId = maxJobId+1;
-		}
-		
-		int bgpId = fork();
-		if ( bgpId==0 ) /*child process*/
-		{
-			if(setpgrp() == -1) 
-			{
-				perror("smash error: setpgrp failed");
-				return -1;
-			}
-			if (execvp(Command,args) == -1)
-			{
-				perror("smash error: execv failed");
-				return -1;
-			}
-		}
-		else if ( bgpId>0 ) /*parent process*/
-		{
-			job *new_job = new job(bgJobId, showpid(), Command, time(NULL), false);
-			jobs.push_back(new_job);
-		}
-		else
-		{
-			perror("smash error: fork failed");
-			return -1;
-		}
-		return 0;
-	}
-	return -1;
-}
-
 
 

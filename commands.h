@@ -28,21 +28,21 @@ class job{
 	
 public:
 	job(){};
-	job(int jobId, int pid, string cmd, double insertingTime, bool isStopped);
+	job(int jobId_, int pid_, string cmd_, double insertingTime_, bool isStopped_);
 	~job(){};
-	int getJobId(){return jobId;}
-	int getPid(){return pid;}
-	string getCmd(){return cmd;}
-	double getInsertingTime(){return insertingTime;}
-	bool getIsStopped(){return isStopped;}
+	int getJobId();
+	int getPid();
+	string getCmd();
+	double getInsertingTime();
+	bool getIsStopped();
 	
 };
 
 
 
 int ExeComp(char* lineSize);
-int BgCmd(char* lineSize, vector<job*> jobs);
-int ExeCmd(vector<job*> jobs, char* lineSize, char* cmdString, char *past_directory, char *past_temp);
+int BgCmd(char* lineSize, vector<job*>& jobs);
+int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char *past_directory, char *past_temp);
 void ExeExternal(char *args[MAX_ARG], char* cmdString);
 #endif
 
