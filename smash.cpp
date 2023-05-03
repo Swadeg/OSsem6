@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 					// perform a complicated Command
 		if(!ExeComp(lineSize)) continue; 
 					// background command
-		if(!BgCmd(lineSize, jobs)) continue; 
+		if(!BgCmd(lineSize, jobs)) continue;
 					// built in commands
 		ExeCmd(jobs, lineSize, cmdString, past_directory, past_temp);
 		/* initialize for next line read*/
@@ -75,4 +75,3 @@ int main(int argc, char *argv[])
 	}
     return 0;
 }
-
