@@ -12,6 +12,7 @@ main file. This file contains the main function of smash
 #include "signals.h"
 #include <vector>
 #include <iostream>
+#include <csignal>
 #define MAX_LINE_SIZE 80
 #define MAXARGS 20
 
@@ -22,6 +23,13 @@ vector<job*> jobs;
 //void* jobs = NULL; //This represents the list of jobs. Please change to a preferred type (e.g array of char*)
 
 char lineSize[MAX_LINE_SIZE]; 
+
+void ctrlz_handler_smash(int signum)
+{
+    cout<< "smash: caught ctrl-Z" << endl;
+    ctrlz_handler_command(jobs);
+}
+
 //**************************************************************************************
 // function name: main
 // Description: main function of smash. get command from user and calls command functions
@@ -44,6 +52,8 @@ int main(int argc, char *argv[])
 
 	/************************************/
 	// Init globals 
+    signal(SIGINT, ctrlc_handler_command);
+    signal(SIGTSTP, ctrlz_handler_smash);
     
     long size = pathconf(".", _PC_PATH_MAX);
 	if (size == 0) return 1; // error

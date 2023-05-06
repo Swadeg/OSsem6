@@ -1,6 +1,7 @@
 //		commands.c
 //********************************************
 #include "commands.h"
+#include "signals.h"
 using namespace std;
 
 
@@ -8,8 +9,9 @@ using namespace std;
 //implementinf class functions
 //*****************************
 
+vector<job*> fg;
 
-job::job(int jobId_, int pid_, char* cmd_, double insertingTime_, bool isStopped_)
+job::job(int jobId_, int pid_, char* cmd_, job_States job_state_,double insertingTime_)
 {
 	jobId = jobId_;
 	pid = pid_;
@@ -17,8 +19,8 @@ job::job(int jobId_, int pid_, char* cmd_, double insertingTime_, bool isStopped
 	int cmd_len = strlen(cmd_)+1;
 	cmd = new char[cmd_len];
 	strncpy(cmd, (const char*)cmd_, cmd_len-1);
+	job_state=job_state_;
 	insertingTime = insertingTime_;
-	isStopped = isStopped_;
 }
 int job::getJobId()
 {
@@ -38,7 +40,17 @@ double job::getInsertingTime()
 }
 bool job::getIsStopped()
 {
-	return isStopped;
+	return (job_state==Stopped);
+}
+
+job_States job::getjob_St()
+{
+	return job_state;
+}
+
+void job::setjob_St(const job_States newstate)
+{
+	job_state=newstate;
 }
 
 //**********************************
@@ -50,8 +62,8 @@ void deleteFinishedJobs(vector<job*>& jobs)
 	int index = 0;
 	for (unsigned int i = 0; i < jobs.size(); i++)
 	{
-	        int status;
-		int waitResult = waitpid(jobs[i]->getPid(), nullptr, WNOHANG);
+	    int status;
+		int waitResult = waitpid(jobs[i]->getPid(), &status, WNOHANG);
 		if (waitResult != 0) // means job[i] has finished
 		{
 			jobs.erase(jobs.begin() + index);
@@ -86,7 +98,7 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 	char* cmd;
 	char* args[MAX_ARG];
 	char pwd[MAX_LINE_SIZE];
-	char* delimiters = " \t\n";
+	const char* delimiters = " \t\n";
 	int i = 0, num_arg = 0;
 	bool illegal_cmd = FALSE; // illegal command
 
@@ -110,6 +122,11 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 	/*************************************************/
 	if (!strcmp(cmd, "cd"))
 	{
+		if (num_arg == 0)
+		{
+			return 1;
+		}
+
 		char* directory = args[1];
 		long size = pathconf(".", _PC_PATH_MAX);
 		if (size == 0) return 1; // error
@@ -246,7 +263,7 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 		for (int i = 0; i < jobs.size(); i++)
 		{
 			timeElapsed = difftime(time(NULL), jobs[i]->getInsertingTime());
-			if (jobs[i]->getIsStopped())
+			if (jobs[i]->getjob_St() == Stopped)
 			{
 				cout << "[" << jobs[i]->getJobId() << "] " << jobs[i]->getCmd() << " : " << jobs[i]->getPid() << " " << timeElapsed << " secs " << "(stopped)" << endl;
 			}
@@ -259,7 +276,22 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 		return 0;
 	}
 
+        /*************************************************/
+      	else if (!strcmp(cmd, "fgjobs"))
+	{
+		double timeElapsed;
+		//deleteFinishedJobs(fg);
+		for (int i = 0; i < fg.size(); i++)
+		{
+			timeElapsed = difftime(time(NULL), fg[i]->getInsertingTime());
+			if (fg[i]->getjob_St() == Foreground)
+			{
+				cout << "[" << fg[i]->getJobId() << "] " << fg[i]->getCmd() << " : " << fg[i]->getPid() << " " << timeElapsed << " secs " << "(fg)" << endl;
+			}
+		}
 
+		return 0;
+	}
 	/*************************************************/
 	else if (!strcmp(cmd, "kill"))
 	{
@@ -324,9 +356,18 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 				int status = 0;
 				cout << jobs[i]->getCmd() << " : " << jobs[i]->getPid() << endl;
 				kill(jobs[i]->getPid(), SIGCONT);
+				jobs[i]->setjob_St(Foreground);
+				fg.push_back(jobs[i]);
 				int waitRes = waitpid(jobs[i]->getPid(), &status, WUNTRACED);
 				if (waitRes == -1 ) cout << "smash error : waitpid failed" << endl;
 				jobs.erase( jobs.begin()+i );
+				for(unsigned int i=0;i<fg.size();i++)
+				{
+					//if (fg[i]->getJobId==jobIdToFg)
+					//{
+					//	fg.erase(fg.begin()+i);
+					//}
+				}
 				return 0;
 			}
 		}
@@ -340,7 +381,7 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 	{
 		if (num_arg > 1)
 		{
-			cout << "smash error: fg: invalid arguments" << endl;
+			cout << "smash error: bg: invalid arguments" << endl;
 			return 1;
 		}
 
@@ -353,7 +394,7 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 		{
 			if (jobs.size() == 0)
 			{
-				cout << "‫‪smash‬‬ ‫‪error:‬‬ ‫‪fg:‬‬ ‫‪jobs‬‬ ‫‪list‬‬ ‫‪is‬‬ ‫‪empty‬‬" << endl;
+				cout << "‫‪smash‬‬ ‫‪error:‬‬ ‫‪bg:‬‬ ‫‪jobs‬‬ ‫‪list‬‬ ‫‪is‬‬ ‫‪empty‬‬" << endl;
 				return 1;
 			}
 
@@ -450,6 +491,7 @@ int ExeCmd(vector<job*>& jobs, char* lineSize, char* cmdString, char* past_direc
 
 
 			}
+			exit(0);
 			return 0;
 		}
 
@@ -553,6 +595,8 @@ void ExeExternal(char* args[MAX_ARG], char* cmdString)
 		// Add your code here
 		// if pid > 0 its parent procces
 		int status;
+		job* new_job = new job(1, pID, cmdString,Foreground ,time(NULL)); // num 1 for job's id is random
+		fg.push_back(new_job);
 		if (waitpid(pID, &status, WUNTRACED) == -1)
 		{
 			perror("smash error: waitpid failed");
@@ -569,7 +613,7 @@ void ExeExternal(char* args[MAX_ARG], char* cmdString)
 int BgCmd(char* lineSize, vector<job*>& jobs)
 {
 	char* Command;
-	char* delimiters = " \t\n";
+	const char* delimiters = " \t\n";
 	char* args[MAX_ARG];
 	int num_arg = 0;
 	int maxJobId = 0;
@@ -627,7 +671,7 @@ int BgCmd(char* lineSize, vector<job*>& jobs)
 		}
 		else
 		{
-			job* new_job = new job(bgJobId, bgpId, fullCommand, time(NULL), false);
+			job* new_job = new job(bgJobId, bgpId, fullCommand,Background ,time(NULL));
 			jobs.push_back(new_job);	
 		}
 		return 0;
@@ -654,3 +698,17 @@ int ExeComp(char* lineSize)
 	}
 	return -1;
 }
+
+/* signals commands */
+
+void ctrlc_handler_command(int signum)
+{
+    cout<< "smash: caught ctrl-C" << endl;
+    ctrlc_handle(fg);
+}
+
+void ctrlz_handler_command(vector<job*>& jobs)
+{
+    ctrlz_handle(jobs, fg);
+}
+

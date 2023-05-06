@@ -8,9 +8,10 @@ RM = rm -f
 smash: $(OBJS)
 	$(CCLINK) $(CFLAGS)-o smash $(OBJS)
 # Creating the object files
+signals.o: signals.cpp signals.h commands.h
 commands.o: commands.cpp commands.h
 smash.o: smash.cpp commands.h
-signals.o: signals.cpp signals.h
+
 # Cleaning old files before new make
 clean:
 	$(RM) $(TARGET) *.o *~ "#"* core.*
