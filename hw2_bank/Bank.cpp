@@ -425,12 +425,12 @@ void* backup_fees(void * ptr)
 
         for (unsigned int i=0; i<accounts_vec.size(); i++)
         {
-            calced_fee = round((accounts_vec[i]->get_amount()) * fee_percent/100);
+            calced_fee = round((accounts_vec[i]->get_amount()) * (double)fee_percent/100);
             pthread_mutex_lock (&wr_to_log);
             outputFile << "Bank: commissions of " << fee_percent << " % were charged, the bank gained " <<
                 calced_fee << " $ from account " << accounts_vec[i]->get_acc_id() << endl;
-            pthread_mutex_unlock (&wr_to_log);
             bank_balance += calced_fee;
+            pthread_mutex_unlock (&wr_to_log);
             accounts_vec[i]->decrease_amount(calced_fee);
         }
         sleep(3); // sleep for 3 secomds
@@ -485,15 +485,16 @@ int main (int argc, char *argv[])
         pthread_t new_thread;
         atm_vec.push_back(new_thread);
         files_paths.push_back(argv[i]);
+        finished_atm_vec.push_back(false);
         if (pthread_create(&atm_vec[i-1], NULL, parse_file, (void*) argv[i]))
         {
             // cant create thread
             cerr << "Bank error: pthread_create failed" << endl;
             return 1;
         }
-        finished_atm_vec.push_back(false);
+        
     }
-
+    
     //create thread for the bank for backup fees
     pthread_t Bank_thread;
     if (pthread_create(&Bank_thread, NULL, backup_fees, NULL))
@@ -512,15 +513,16 @@ int main (int argc, char *argv[])
         return 1;
     }
 
-    for (int i = 0; i < argc-1; ++i) {
+    for (int i = 0; i < argc-1; i++) {
         //mark atm as finished
-        finished_atm_vec[i] = true;
+        
         if (pthread_join(atm_vec[i], NULL))
         {
             // cant join thread
             cerr << "Bank error: pthread_join failed" << endl;
             return 1;
         }
+        finished_atm_vec[i] = true;
     }
     if (pthread_join(Bank_thread, NULL))
     {
