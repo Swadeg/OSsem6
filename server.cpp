@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <sys/select.h>
 #include <fstream>
+#include <cstdio> // For remove function
+#include <stdio.h>
 
 #define BUFFMAX 516  
 
@@ -72,6 +74,7 @@ int main(int argc, char *argv[])
     bool last_pkg = true;
     vector<const char*> files_vec;
     std::ofstream file("out.txt", std::ios::app);
+    std::vector<std::ofstream> fileVector;
     struct sockaddr_in* curr_client = {0};
     cliAddrLen = sizeof(client_addr);
     if ((recvMsgSize = recvfrom(sockfd, (char *)buffer, BUFFMAX, 0,
@@ -112,6 +115,14 @@ int main(int argc, char *argv[])
         if(fail_count >= max_num_of_resp)
         {
             //abndoned file transmission
+            if(!files_vec.empty())
+            {
+                if (remove(files_vec.back()) != 0) {
+                    std::perror("TTFTP_ERROR:remove file failed");
+                    return 1;
+                }
+                files_vec.pop_back();
+            }
             std::cout << "in Abndoned file transmission" << endl;
             char response[4];
             response[0] = '\x00';
@@ -173,7 +184,6 @@ int main(int argc, char *argv[])
                     break;
                 }
             }
-            //auto it = find(files_vec.begin(), files_vec.end(), filename);
 
             if(filename_exist)
             {
@@ -195,22 +205,26 @@ int main(int argc, char *argv[])
                     exit(1);
                 } 
             }
-            char* new_file = new char[strlen(filename) + 1];
-            strcpy(new_file, filename);
-            files_vec.push_back(new_file);
-            last_pkg = false;
-            const char* mode = filename + strlen(filename) + 1;  // Skip the filename and null terminator
-            std::cout << "Mode: " << mode << std::endl;
-            ackBuffer[0] = '\x00';
-            ackBuffer[1] = '\x04';
-            ackBuffer[2] = '\x00';
-            ackBuffer[3] = '\x00';
-            if (sendto(sockfd, ackBuffer, 4, 0, (struct sockaddr *) curr_client, sizeof(*curr_client)) != 4)
+            else
             {
-                perror("TTFTP_ERROR:sendto failed");
-                exit(1);
+                char* new_file = new char[strlen(filename) + 1];
+                strcpy(new_file, filename);
+                fileVector.push_back(std::ofstream(new_file));
+                files_vec.push_back(new_file);
+                last_pkg = false;
+                const char* mode = filename + strlen(filename) + 1;  // Skip the filename and null terminator
+                std::cout << "Mode: " << mode << std::endl;
+                ackBuffer[0] = '\x00';
+                ackBuffer[1] = '\x04';
+                ackBuffer[2] = '\x00';
+                ackBuffer[3] = '\x00';
+                if (sendto(sockfd, ackBuffer, 4, 0, (struct sockaddr *) curr_client, sizeof(*curr_client)) != 4)
+                {
+                    perror("TTFTP_ERROR:sendto failed");
+                    exit(1);
+                }
+                expected_block_num = 1;
             }
-            expected_block_num = 1;
         }
 
         else if(opcode == 3)
@@ -242,6 +256,17 @@ int main(int argc, char *argv[])
             {
                 //bad block number
                 cout << "in bad block number" << endl;
+                cout << "recieved_pack = " << recieved_pack << endl;
+                cout << "expected_block_num = " << expected_block_num << endl;
+                if(!files_vec.empty())
+                {
+                    if (remove(files_vec.back()) != 0) {
+                        std::perror("TTFTP_ERROR:remove file failed");
+                        return 1;
+                    }
+                    files_vec.pop_back();
+                }
+
                 char response[4];
                 response[0] = '\x00';
                 response[1] = '\x05';
@@ -258,21 +283,28 @@ int main(int argc, char *argv[])
                     exit(1);
                 }  
             }
-
-            char* data = buffer + 4;
-            if( !last_pkg )file << data << endl;
-            expected_block_num++;
-            ackBuffer[0] = '\x00';
-            ackBuffer[1] = '\x04';
-            ackBuffer[2] = buffer[2];
-            ackBuffer[3] = buffer[3];
-
-            if (sendto(sockfd, ackBuffer, 4, 0, (struct sockaddr *) curr_client, sizeof(*curr_client)) != 4)
+            else
             {
-                perror("TTFTP_ERROR:sendto failed");
-                exit(1);
+                char* data = buffer + 4;
+                if( !last_pkg )(fileVector.back()) << data << endl;
+                expected_block_num++;
+                ackBuffer[0] = '\x00';
+                ackBuffer[1] = '\x04';
+                ackBuffer[2] = buffer[2];
+                ackBuffer[3] = buffer[3];
+
+                if (sendto(sockfd, ackBuffer, 4, 0, (struct sockaddr *) curr_client, sizeof(*curr_client)) != 4)
+                {
+                    perror("TTFTP_ERROR:sendto failed");
+                    exit(1);
+                }
+                if (recvMsgSize < BUFFMAX) 
+                {
+                    expected_block_num--;
+                    last_pkg = true; 
+                }
             }
-            if (recvMsgSize < BUFFMAX) last_pkg = true; 
+
         }
 
         struct timeval tv;
